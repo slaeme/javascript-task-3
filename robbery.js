@@ -255,7 +255,6 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     self.suitable = robberySchedule.getAllSuitableMoments(duration);
     self.suitableWithFilter = robberySchedule.filter(30);
     self.currentIndex = 0;
-    console.info(self.suitable);
 
     return {
 
