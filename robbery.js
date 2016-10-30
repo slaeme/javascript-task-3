@@ -175,6 +175,9 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {Boolean}
          */
         tryLater: function () {
+            if (!this.exists()) {
+                return false;
+            }
             var halfHour = 30;
             var currentMoment = self.allSuitableMoments[self.currentIndex];
 
