@@ -9,11 +9,9 @@ exports.isStar = true;
 
 function RobberySchedule(schedule, duration, workingHours) {
     var self = this;
-    self.duration = duration;
     self.weekdays = ['ПН', 'ВТ', 'СР'];
     self.tableMoments = [];
     self.thieves = [];
-    self.lastFindedMoment = null;
 
     function parseTime(timeStr) {
         var splitTime = timeStr.split(/[ :+]+/);
@@ -89,41 +87,26 @@ function RobberySchedule(schedule, duration, workingHours) {
             return false;
         }
 
-        return moment.bank && (moment.duration >= self.duration);
+        return moment.bank && (moment.duration >= duration);
     }
 
-    self.findSuitableMoment = function (start) {
-        start = start || 0;
-        var currentMoment = (self.lastFindedMoment) ? self.lastFindedMoment : {};
-
-        for (var i = start; i < self.tableMoments.length - 1; i++) {
+    self.findAllSuitableMoment = function () {
+        var suitableTime = [];
+        var currentMoment = {};
+        for (var i = 0; i < self.tableMoments.length - 1; i++) {
             var node = self.tableMoments[i];
             var nextNode = self.tableMoments[i + 1];
             currentMoment.duration = (nextNode.time - node.time) / (1000 * 60);
             currentMoment[node.event.who] = node.event.available;
             if (isSuitableMoment(currentMoment)) {
-                currentMoment.time = node.time;
-                currentMoment.index = i;
-                self.lastFindedMoment = currentMoment;
-
-                return new Date(self.lastFindedMoment.time.getTime());
+                suitableTime.push({
+                    time: new Date(node.time.getTime()),
+                    duration: currentMoment.duration
+                });
             }
         }
 
-        return false;
-    };
-
-    self.findNextMoment = function (step) {
-        if (!self.lastFindedMoment) {
-            return false;
-        }
-        self.lastFindedMoment.time.setMinutes(self.lastFindedMoment.time.getMinutes() + step);
-        self.lastFindedMoment.duration -= 30;
-        if (isSuitableMoment(self.lastFindedMoment)) {
-            return new Date(self.lastFindedMoment.time.getTime());
-        }
-
-        return self.findSuitableMoment();
+        return suitableTime;
     };
 
     fillTimeTable();
@@ -140,7 +123,8 @@ function RobberySchedule(schedule, duration, workingHours) {
 exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     var self = this;
     self.robberySchedule = new RobberySchedule(schedule, duration, workingHours);
-    self.suitableMoment = this.robberySchedule.findSuitableMoment();
+    self.allSuitableMoments = this.robberySchedule.findAllSuitableMoment();
+    self.currentIndex = 0;
 
     return {
 
@@ -149,11 +133,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {Boolean}
          */
         exists: function () {
-            if (self.suitableMoment) {
-                return true;
-            }
-
-            return false;
+            return self.allSuitableMoments.length > 0;
         },
 
         /**
@@ -167,14 +147,15 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
             function convertNumberToString(number) {
                 return (number < 10) ? '0' + number.toString() : number.toString();
             }
-            if (!self.suitableMoment) {
+            if (self.currentIndex >= self.allSuitableMoments.length) {
                 return '';
             }
+            var time = self.allSuitableMoments[self.currentIndex].time;
 
             return template
-                .replace('%HH', convertNumberToString(self.suitableMoment.getHours()))
-                .replace('%MM', convertNumberToString(self.suitableMoment.getMinutes()))
-                .replace('%DD', self.robberySchedule.weekdays[self.suitableMoment.getDate() - 1]);
+                .replace('%HH', convertNumberToString(time.getHours()))
+                .replace('%MM', convertNumberToString(time.getMinutes()))
+                .replace('%DD', self.robberySchedule.weekdays[time.getDate() - 1]);
         },
 
         /**
@@ -184,11 +165,16 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          */
         tryLater: function () {
             var halfHour = 30;
+            var currentMoment = self.allSuitableMoments[self.currentIndex];
 
-            var nextSuitableMoment = self.robberySchedule.findNextMoment(halfHour);
+            if (currentMoment.duration - halfHour >= duration) {
+                currentMoment.duration -= halfHour;
+                currentMoment.time.setMinutes(currentMoment.time.getMinutes() + halfHour);
 
-            if (nextSuitableMoment) {
-                self.suitableMoment = nextSuitableMoment;
+                return true;
+            }
+            if (self.currentIndex < self.allSuitableMoments.length - 1) {
+                self.currentIndex++;
 
                 return true;
             }
