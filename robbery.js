@@ -12,6 +12,7 @@ function RobberySchedule(schedule, duration, workingHours) {
     self.weekdays = ['ПН', 'ВТ', 'СР'];
     self.tableMoments = [];
     self.thieves = [];
+    self.allSuitableMoments = [];
 
     function parseTime(timeStr) {
         var splitTime = timeStr.split(/[ :+]+/);
@@ -90,23 +91,33 @@ function RobberySchedule(schedule, duration, workingHours) {
         return moment.bank && (moment.duration >= duration);
     }
 
-    self.findAllSuitableMoment = function () {
-        var suitableTime = [];
+    function getBeginCurrentMoment() {
         var currentMoment = {};
+
+        self.thieves.forEach(function (thief) {
+            currentMoment[thief] = true;
+        });
+        currentMoment.bank = false;
+
+        return currentMoment;
+    }
+
+    self.findAllSuitableMoment = function () {
+        var currentMoment = getBeginCurrentMoment();
         for (var i = 0; i < self.tableMoments.length - 1; i++) {
             var node = self.tableMoments[i];
             var nextNode = self.tableMoments[i + 1];
             currentMoment.duration = (nextNode.time - node.time) / (1000 * 60);
             currentMoment[node.event.who] = node.event.available;
             if (isSuitableMoment(currentMoment)) {
-                suitableTime.push({
+                self.allSuitableMoments.push({
                     time: new Date(node.time.getTime()),
                     duration: currentMoment.duration
                 });
             }
         }
 
-        return suitableTime;
+        return self.allSuitableMoments;
     };
 
     fillTimeTable();
