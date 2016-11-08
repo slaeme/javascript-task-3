@@ -7,15 +7,13 @@
 exports.isStar = true;
 
 
-function RobberySchedule(schedule, duration, workingHours) {
-    this.weekdays = ['ПН', 'ВТ', 'СР'];
-    this.events = [];
-    this.robbers = [];
-    this.allSuitableMoments = [];
+function findAllSuitableMoments(schedule, duration, workingHours, weekdays) {
+    var events = [];
+    var robbers = [];
 
-    this.addEvent = function (timeStr, who, available, shiftTimezone) {
+    function addEvent(timeStr, who, available, shiftTimezone) {
         shiftTimezone = shiftTimezone || 0;
-        var time = parseTime(timeStr, this.weekdays);
+        var time = parseTime(timeStr, weekdays);
         var event = {
             time: new Date(2015, 5, time.day, time.hour + shiftTimezone, time.minutes, 0, 0),
             event: {
@@ -24,19 +22,11 @@ function RobberySchedule(schedule, duration, workingHours) {
             }
         };
 
-        this.events.push(event);
-    };
+        events.push(event);
+    }
 
-    this.addBankNodes = function () {
-        var self = this;
 
-        this.weekdays.forEach(function (day) {
-            self.addEvent(day + ' ' + workingHours.from, 'bank', true);
-            self.addEvent(day + ' ' + workingHours.to, 'bank', false);
-        });
-    };
-
-    this.addRobbersNodes = function (bankTimezone) {
+    function addRobbersNodes(bankTimezone) {
         for (var thief in schedule) {
             if (!schedule.hasOwnProperty(thief)) {
                 continue;
@@ -44,50 +34,57 @@ function RobberySchedule(schedule, duration, workingHours) {
 
             var robberSchedule = schedule[thief];
 
-            this.robbers.push(thief);
+            robbers.push(thief);
             for (var i = 0; i < robberSchedule.length; i++) {
-                var fromTime = parseTime(robberSchedule[i].from, this.weekdays);
+                var fromTime = parseTime(robberSchedule[i].from, weekdays);
                 var shiftTimezone = bankTimezone - fromTime.timezone;
 
-                this.addEvent(robberSchedule[i].from, thief, false, shiftTimezone);
-                this.addEvent(robberSchedule[i].to, thief, true, shiftTimezone);
+                addEvent(robberSchedule[i].from, thief, false, shiftTimezone);
+                addEvent(robberSchedule[i].to, thief, true, shiftTimezone);
             }
         }
-    };
+    }
 
-    this.fillEvents = function () {
-        var bankTimeZone = parseTime('ПН ' + workingHours.from, this.weekdays).timezone;
+    function fillEvents() {
+        var bankTimeZone = parseTime('ПН ' + workingHours.from, weekdays).timezone;
 
-        this.addBankNodes();
-        this.addRobbersNodes (bankTimeZone);
-        this.events.sort(function (a, b) {
+        weekdays.forEach(function (day) {
+            addEvent(day + ' ' + workingHours.from, 'bank', true);
+            addEvent(day + ' ' + workingHours.to, 'bank', false);
+        });
+
+        addRobbersNodes (bankTimeZone);
+        events.sort(function (a, b) {
             return a.time - b.time;
         });
-    };
+    }
 
-    this.findAllSuitableMoment = function () {
-        var currentMoment = getBeginMoment(this.robbers);
-        for (var i = 0; i < this.events.length - 1; i++) {
-            var node = this.events[i];
-            var nextNode = this.events[i + 1];
+    function getAllSuitableMoment() {
+        var allSuitableMoments = [];
+        var currentMoment = getBeginMoment(robbers);
+        for (var i = 0; i < events.length - 1; i++) {
+            var node = events[i];
+            var nextNode = events[i + 1];
             var MILLISECONDS_IN_MINUTE = 1000 * 60;
 
             currentMoment.duration = (nextNode.time - node.time) / (MILLISECONDS_IN_MINUTE);
             currentMoment[node.event.name] = node.event.available;
-            if (isSuitableMoment(currentMoment, this.robbers)) {
-                this.allSuitableMoments.push({
+            if (isSuitableMoment(currentMoment, robbers)) {
+                allSuitableMoments.push({
                     time: new Date(node.time.getTime()),
                     duration: currentMoment.duration
                 });
             }
         }
 
-        return this.allSuitableMoments;
-    };
+        return allSuitableMoments;
+    }
 
-    this.fillEvents();
+    fillEvents();
 
-    function parseTime(timeStr, weekdays) {
+    return getAllSuitableMoment();
+
+    function parseTime(timeStr) {
         var splitTime = timeStr.split(/[ :+]/);
 
         return {
@@ -98,7 +95,7 @@ function RobberySchedule(schedule, duration, workingHours) {
         };
     }
 
-    function isSuitableMoment(event, robbers) {
+    function isSuitableMoment(event) {
         var suitableForRobbers = robbers.every(function (robber) {
             return event[robber];
         });
@@ -106,7 +103,7 @@ function RobberySchedule(schedule, duration, workingHours) {
         return suitableForRobbers && event.bank && (event.duration >= duration);
     }
 
-    function getBeginMoment(robbers) {
+    function getBeginMoment() {
         var currentMoment = {};
 
         robbers.forEach(function (thief) {
@@ -127,10 +124,10 @@ function RobberySchedule(schedule, duration, workingHours) {
  * @returns {Object}
  */
 exports.getAppropriateMoment = function (schedule, duration, workingHours) {
-    var robberySchedule = new RobberySchedule(schedule, duration, workingHours);
+    var weekdays = ['ПН', 'ВТ', 'СР'];
 
     return {
-        allSuitableMoments: robberySchedule.findAllSuitableMoment(),
+        allSuitableMoments: findAllSuitableMoments(schedule, duration, workingHours, weekdays),
         currentIndex: 0,
 
         /**
@@ -157,7 +154,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
             return template
                 .replace('%HH', supplementNumberZero(time.getHours()))
                 .replace('%MM', supplementNumberZero(time.getMinutes()))
-                .replace('%DD', robberySchedule.weekdays[time.getDate() - 1]);
+                .replace('%DD', weekdays[time.getDate() - 1]);
         },
 
         /**
